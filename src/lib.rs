@@ -161,6 +161,8 @@ loop{
     match str.trim(){
         "Y" => {},
         "y" => {},
+        "yes" => {},
+        "YES" => {},
         _ => {break;}   
      }
 }
