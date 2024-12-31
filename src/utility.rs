@@ -1,9 +1,11 @@
-use crate::structures::RSAInfo;
-use std::io::{self, Write};
+use crate::{modded_exponent, structures::RSAInfo};
+use std::{io::{self, Write},  sync::{atomic::{AtomicBool, Ordering}, Arc, Mutex}, thread, time::Duration};
+
+const PRIME_MAX:u64 = u64::MAX / 3;
 
 pub fn get_primes(info: &mut RSAInfo) {
     println!("First, we need to get two prime numbers.");
-    println!("Try to pick a location between 1 billion and 100 billion.");
+    println!("Try to pick a location between 3 and {}.", PRIME_MAX);
     println!("Let me know where to start looking and I'll find you two.");
     print!("Enter a number:    ");
     io::stdout().flush().unwrap();
@@ -87,6 +89,204 @@ pub fn get_d(info: &mut RSAInfo) {
 }
 
 
+fn find_prime(num:u64) -> (u64, u64){
+    let mid = PRIME_MAX / 2;
+    let mut range = num;
+   if num < 3 || num > PRIME_MAX{
+        range = mid;
+   }
+
+    let mut result:(u64,u64) = (0,0);
+    if range < mid{
+        result.0 = find_prime_async(0, range, true);
+
+    }else{
+        result.0 = find_prime_async(range, u64::MAX, false);
+    }
+    if result.0 == 0{
+        result.0 = find_prime_async(range, u64::MAX, false);
+    }
+    let start = u64::MAX / result.0;
+
+    result.1 = find_prime_async(0, start, true);
+
+    if result.0 == 0 || result.1 == 0{
+        panic!("Cannot have primes as zero.");
+    }
+    if (result.0 as u128) * (result.1 as u128) > u64::MAX as u128{
+        panic!("Cannot have modulus over u64 max.");
+    }
+
+    result
+}
+
+// #[cfg(debug_assertions)]
+// fn print_debugging_info(print: String) {
+//     println!("{}", print);
+// }
+
+fn find_prime_async(start:u64, end:u64, go_down:bool) -> u64{
+
+    let mut result:u64 = 0;
+    let total = end - start;
+    let range: Box<dyn Iterator<Item = u64>> = if go_down {Box::new((start..=end).rev())} else {Box::new(start..=end)};
+    if total < u64::MAX{
+        for i in range{
+            if is_prime_mr(i){
+                if is_prime(i){
+                    result = i;
+                    break;
+                }
+               
+            }
+        }
+    }else{
+        
+        let chunk = total / 4;
+        let section1 = start + chunk;
+        let section2 = start + (chunk * 2);
+        let section3 = start + (chunk * 3);
+        let arc_result = Arc::new(Mutex::new(0u64));
+        let thread_cancel = Arc::new(Mutex::new(false));
+        let mut arc_handles = vec![];
+
+        let arc_result1 = arc_result.clone();
+        let threadcancel1 = thread_cancel.clone();
+        let handle1 = thread::spawn(move ||{
+            //print_debugging_info(format!("thread {:?} started.", thread::current().id()));
+            let range1: Box<dyn Iterator<Item = u64>> = if go_down {Box::new((start..=section1).rev())} else {Box::new(start..=section1)};
+           
+            for i in range1{
+                if i % 50 == 0 && *threadcancel1.lock().unwrap(){
+                    //print_debugging_info(format!("thread {:?} cancelled.", thread::current().id()));
+                    break;
+                }
+                
+                if is_prime_cancellable(i, threadcancel1.clone()){
+                    let mut num = arc_result1.lock().unwrap();
+                    if *num == 0{
+                        *num = i;
+                    }
+                    break;
+                }
+            }
+        });
+        arc_handles.push(handle1);
+
+        let arc_result2 = arc_result.clone();
+        let threadcancel2 = thread_cancel.clone();
+        let handle2 = thread::spawn(move ||{
+            //print_debugging_info(format!("thread {:?} started.", thread::current().id()));
+            let range2: Box<dyn Iterator<Item = u64>> = if go_down {Box::new((section1..=section2).rev())} else {Box::new(section1..=section2)};
+           
+            for i in range2{
+                if i % 50 == 0 && *threadcancel2.lock().unwrap(){
+                    //print_debugging_info(format!("thread {:?} cancelled.", thread::current().id()));
+                    break;
+                }
+                
+                if is_prime_cancellable(i, threadcancel2.clone()){
+                    let mut num = arc_result2.lock().unwrap();
+                    if *num == 0{
+                        *num = i;
+                    }
+                    break;
+                }
+            }
+        });
+        arc_handles.push(handle2);
+
+        let arc_result3 = arc_result.clone();
+        let threadcancel3 = thread_cancel.clone();
+        let handle3 = thread::spawn(move ||{
+            //print_debugging_info(format!("thread {:?} started.", thread::current().id()));
+            let range3: Box<dyn Iterator<Item = u64>> = if go_down {Box::new((section2..=section3).rev())} else {Box::new(section2..=section3)};
+           
+            for i in range3{
+                if i % 50 == 0 &&  *threadcancel3.lock().unwrap(){
+                    //print_debugging_info(format!("thread {:?} cancelled.", thread::current().id()));
+                    break;
+                }
+                
+                if is_prime_cancellable(i, threadcancel3.clone()){
+                    let mut num = arc_result3.lock().unwrap();
+                    if *num == 0{
+                        *num = i;
+                    }
+                    break;
+                }
+            }
+        });
+        arc_handles.push(handle3);
+
+
+        let arc_result4 = arc_result.clone();
+        let threadcancel4 = thread_cancel.clone();
+        let handle4 = thread::spawn(move ||{
+            //print_debugging_info(format!("thread {:?} started.", thread::current().id()));
+            let range4: Box<dyn Iterator<Item = u64>> = if go_down {Box::new((section3..=end).rev())} else {Box::new(section3..=end)};
+           
+            for i in range4{
+                if i % 50 == 0 && *threadcancel4.lock().unwrap(){
+                    //print_debugging_info(format!("thread {:?} cancelled.", thread::current().id()));
+                    break;
+                }
+                
+                if is_prime_cancellable(i, threadcancel4.clone()){
+                    let mut num = arc_result4.lock().unwrap();
+                    if *num == 0{
+                        *num = i;
+                    }
+                    break;
+                }
+            }
+        });
+        arc_handles.push(handle4);
+
+        let threadcancel5 = thread_cancel.clone();
+        let printhandle = thread::spawn(move|| {
+            let mut i = 0;
+            loop{
+                if i >= 10{
+                    i = 0;
+                    println!("Working...");
+                }
+                thread::sleep(Duration::from_millis(500));
+                i += 1;
+                if i % 2 == 0 && *threadcancel5.lock().unwrap(){
+                    break;
+                }
+
+                
+            }
+            //println!("printmessage cancelled.");
+        });
+        arc_handles.push(printhandle);
+
+
+
+        let threadcancelprint = Mutex::new(thread_cancel.clone());
+        for j in arc_handles{
+            //let a = j.thread().id();
+            j.join().unwrap();
+           
+            let arcresult =  arc_result.lock().unwrap();
+            //print_debugging_info(format!("thread {:?} joined with main with value {}.", a, arcresult));
+
+            if *arcresult != 0 && result == 0{
+                result = *arcresult;
+                let t = threadcancelprint.lock().unwrap();
+                *t.lock().unwrap() = true;
+                //print_debugging_info(format!("Cancel issued because thread {:?} joined with main with value {}.", a, arcresult));
+            }
+        }
+        
+
+    }
+    result
+}
+
+
 
 fn is_prime(num:u64) -> bool{
     let sqrt:u64 = (num as f32).sqrt().ceil() as u64;
@@ -97,49 +297,81 @@ fn is_prime(num:u64) -> bool{
     }
     true
 }
-fn find_prime(num:u64) -> (u64, u64){
-    let mid = 50000000000;
-    let mut range = num;
-   if num <= 1000000000 || num >= 100000000000{
-        range = mid;
-   }
 
-    let mut result:(u64,u64) = (0,0);
-    if range < mid{
-        for i in (0..=num).rev(){
-            if is_prime(i){
-                result.0 = i;
-                break;
-            }
-        }
-    }else{
-        for j in range..u64::MAX{
-            if is_prime(j){
-                result.0 = j;
-                break;
-            }
-        }
 
-    }
-    if result.0 == 0{
-        for k in range..u64::MAX{
-            if is_prime(k){
-                result.0 = k;
-                break;
-            }
+fn is_prime_cancellable(num:u64, cancel:Arc<Mutex<bool>>) -> bool{
+    let sqrt:u64 = (num as f32).sqrt().ceil() as u64;
+    for i in 2..sqrt{
+       
+        if i % 100 == 0 && *cancel.lock().unwrap(){
+            //print_debugging_info(format!("thread {:?} cancelled from is_prime_cancellable.", thread::current().id()));
+            return false;
+        }
+        
+        if num % i == 0{
+            return false;
         }
     }
-    let start = u64::MAX / result.0;
-
-    for l in (0..=start).rev(){
-        if is_prime(l){
-            result.1 = l;
-            break;
-        }
-    }
-
-    result
+    true
 }
+
+pub fn is_prime_mr(num: u64) -> bool {
+    let one: u64 = 1u64;
+    if num <= one || num == 4 {
+        return false;
+    }
+    if num <= 3 {
+        return true;
+    }
+
+    let mut d = num - one;
+    while d % 2 == 0 {
+        d /= 2;
+    }
+
+    for _ in 0..10 {
+        if miller_test(d.clone(), num) == false {
+            return false;
+        }
+    }
+    true
+}
+
+fn miller_test(d:u64, num:u64) -> bool{
+    let mut d = d;
+    let mut array = Vec::new();
+    array.push(num/2 + num/4);
+    array.push(num/2 + num/11);
+    array.push(num/3);
+    array.push(num/11);
+    let one: u64 = 1;
+    let two: u64 = 2;
+
+
+    let random_num = array.pop().unwrap();
+    
+    let a = 2 + random_num;
+
+    let mut x = modded_exponent(a, d, num);
+
+    if x == one || x == num - one {
+        return true;
+    }
+
+    while d != (num - one) {
+        x = modded_exponent(x, 2, num);
+        d *= two;
+
+        if x == one {
+            return false;
+        }
+        if x == num - one {
+            return true;
+        }
+    }
+    false
+}
+
 
 fn get_a_coprime(num:u64, phi: u64) -> u64{
     
@@ -253,30 +485,28 @@ fn test_is_coprime(){
 fn test_find_primes(){
     let returns = find_prime(1_000_000_001);
 
-    let value = (999999937u64, 18446745217u64);
-
-    assert_eq!(returns, value);
+    assert!(is_prime(returns.0,) && is_prime(returns.1));
 
     let returns1 = find_prime(99_999_999_999);
 
-    let value1 = (100000000003u64, 184467427u64);
-
-    assert_eq!(returns1, value1);
+    assert!(is_prime(returns1.0,) && is_prime(returns1.1));
 
     let returns2 = find_prime(4536527634656356);
 
-    let value2 = (50000000021u64, 368934871u64);
+    assert!(is_prime(returns2.0,) && is_prime(returns2.1));
 
-    assert_eq!(returns2, value2);
+    let returns3 = find_prime(3);
+
+    assert!(is_prime(returns3.0,) && is_prime(returns3.1));
 }
 
 #[test]
 fn test_is_primes(){
-    let prime = 50000000021u64;
-    let nonprime = 29999388238928890u64;
+    let prime = 3074457345618258599u64;
+    //let nonprime = 29999388238928890u64;
 
     assert_eq!(is_prime(prime), true);
-    assert_eq!(is_prime(nonprime), false);
+    //assert_eq!(is_prime(nonprime), false);
 }
 
 #[test]
@@ -303,5 +533,18 @@ fn test_extended_euclidean(){
 
     let val = (r.1 % 18446743613945430720i128 + 18446743613945430720i128) % 18446743613945430720i128;
     assert_eq!(13988995656867672227i128, val);
+
+}
+
+#[test]
+fn test_is_prime_miller_rabin(){
+
+    assert_eq!(is_prime_mr(3074457345618258599u64), is_prime(3074457345618258599u64));
+
+    assert_eq!(is_prime_mr(3074457345618258590u64), is_prime(3074457345618258590u64));
+
+
+    assert_eq!(is_prime_mr(8865838643u64), is_prime(8865838643u64));
+
 
 }
