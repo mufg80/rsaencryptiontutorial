@@ -1,4 +1,5 @@
-
+// Main structure of application, which holds all 
+// needed information for encryption and decryption.
 pub struct RSAInfo{
     p:u64,
     q:u64,
@@ -8,6 +9,8 @@ pub struct RSAInfo{
     e:u64,
 }
 impl RSAInfo{
+    // One associated function which is used to create and initialize
+    // the structure.
     pub fn new() -> RSAInfo{
         let f = RSAInfo{
             p : 0u64,
@@ -19,6 +22,8 @@ impl RSAInfo{
         };
         f
     }
+    // public setter and getter methods, no logic involved but could be added later.
+    
     pub fn set_p(&mut self, val:u64){
         self.p = val;
     }

@@ -1,19 +1,27 @@
 use crate::{modded_exponent, structures::RSAInfo};
-use std::{io::{self, Write},  sync::{atomic::{AtomicBool, Ordering}, Arc, Mutex, RwLock}, thread, time::Duration};
+use std::{io::{self, Write}, sync::{Arc, Mutex, RwLock}, thread};
 
 const PRIME_MAX:u64 = u64::MAX / 3;
 
+// Function that gets candidate from user, then works to get two acceptable prime.
+// Primes need to be multiplied together to create an acceptable modulus. Since we are 
+// doing 64 bit encryption, we need a modulus which is lower than u64::MAX. This is so there is no overflow.
 pub fn get_primes(info: &mut RSAInfo) {
     println!("First, we need to get two prime numbers.");
     println!("Try to pick a location between 3 and {}.", PRIME_MAX);
     println!("Let me know where to start looking and I'll find you two.");
     print!("Enter a number:    ");
-    io::stdout().flush().unwrap();
+    if let Err(e) = io::stdout().flush(){
+        println!("Failed to flush the buffer. Error: {e}");
+    }
     let primecandidate:u64;
 
     let mut input:String = String::new();
     
-    io::stdin().read_line(&mut input).unwrap();
+    if let Err(_e) = io::stdin().read_line(&mut input){
+        println!("Failed to get this information, I will supply a default value.");
+        input = String::from("50000000000");
+    }
 
     match input.trim().parse::<u64>(){
         Ok(s) => primecandidate = s,
@@ -26,7 +34,7 @@ pub fn get_primes(info: &mut RSAInfo) {
    println!("Primes {} and {} will be used.", info.get_p(), info.get_q());
 }
 
-
+// Multiplies to get N must be smaller than u64::MAX. 
 pub fn get_modulus(info: &mut RSAInfo)  {
 
     let n:u64 = info.get_p() * info.get_q();
@@ -35,10 +43,11 @@ pub fn get_modulus(info: &mut RSAInfo)  {
     }
     info.set_n(n);
     println!("Multiplying p and q (our primes) will equal {}.",info.get_n());
-    println!("{} is the max u64 value, our modulus is {} less than the max.", u64::MAX, u64::MAX-info.get_n());
+    println!("{} is the max u64 value, our modulus is {} which is {} less than the max.", u64::MAX, info.get_n(), u64::MAX-info.get_n());
     println!("This ensures that our encryption of 8 bytes at a time will not overflow and lose information.");
 }
 
+// Gets eulers totient, each prime minus 1 multiplied together.
 pub fn get_phi(info: &mut RSAInfo) {
     let pmin1 = info.get_p() - 1;
     let qmin1 = info.get_q() - 1;
@@ -47,12 +56,20 @@ pub fn get_phi(info: &mut RSAInfo) {
     println!("To get the euler totient (phi), we need to multiply p-1 * q-1. That equals {}.", info.get_phi());
 }
 
+// Gets e exponent, User supplies a candidate, but function will choose a correct value.
+// this exponent must be coprime with eulers totient.
 pub fn get_e(info: &mut RSAInfo)  {
     println!("Our public exponent e must be coprime with our phi. Give me a place to start looking and I'll find you one.");
     let mut input:String = String::new();
     print!("Enter a number:    ");
-    io::stdout().flush().unwrap();
-    io::stdin().read_line(&mut input).unwrap();
+    if let Err(e) = io::stdout().flush(){
+        println!("Error reading from buffer, Error: {}", e);
+    }
+
+    if let Err(_e) = io::stdin().read_line(&mut input){
+        println!("Failed to get this information, I will supply a default value.");
+        input = String::from("500000000");
+    }
     let number:u64;
     match input.trim().parse::<u64>(){
         Ok(s) => {
@@ -67,6 +84,8 @@ pub fn get_e(info: &mut RSAInfo)  {
     
 }
 
+// Get exponent d, this exponent must be the modular inverse of eulers totient.
+// must perform euclideans extended algorithm to find it.
 pub fn get_d(info: &mut RSAInfo) {
     let eul= i128::try_from(info.get_phi());
     let eul = match eul{
@@ -88,7 +107,8 @@ pub fn get_d(info: &mut RSAInfo) {
     println!("{} is exponent d.", val as u64);
 }
 
-
+// function to find both primes. What ever value user chooses, this algorithm will find one so that
+// the multiplication of the two is slightly less than u64::MAX.
 fn find_prime(num:u64) -> (u64, u64){
     let mid = PRIME_MAX / 2;
     let mut range = num;
@@ -120,24 +140,17 @@ fn find_prime(num:u64) -> (u64, u64){
     result
 }
 
-// #[cfg(debug_assertions)]
-// fn print_debugging_info(print: String) {
-//     println!("{}", print);
-// }
-
+// Used by above function, this function uses multithreading to find primes quickly.
 fn find_prime_async(start:u64, end:u64, go_down:bool) -> u64{
 
     let mut result:u64 = 0;
     let total = end - start;
     let range: Box<dyn Iterator<Item = u64>> = if go_down {Box::new((start..=end).rev())} else {Box::new(start..=end)};
-    if total < 500000{
+    if total < 100{
         for i in range{
-            if is_prime_mr(i){
-                if is_prime(i){
-                    result = i;
-                    break;
-                }
-               
+            if is_prime(i){
+                result = i;
+                break;
             }
         }
     }else{
@@ -153,20 +166,26 @@ fn find_prime_async(start:u64, end:u64, go_down:bool) -> u64{
         let arc_result1 = arc_result.clone();
         let threadcancel1 = thread_cancel.clone();
         let handle1 = thread::spawn(move ||{
-            //print_debugging_info(format!("thread {:?} started.", thread::current().id()));
             let range1: Box<dyn Iterator<Item = u64>> = if go_down {Box::new((start..=section1).rev())} else {Box::new(start..=section1)};
            
             for i in range1{
-                if i % 50 == 0 && *threadcancel1.read().unwrap(){
-                    //print_debugging_info(format!("thread {:?} cancelled.", thread::current().id()));
-                    break;
-                }
-                if is_prime_mr(i){
-                    let mut num = arc_result1.lock().unwrap();
-                    if *num == 0{
-                        *num = i;
+                if i % 10 == 0 {
+                    let g = threadcancel1.read();
+                    let h = match g{
+                        Ok(s) => *s,
+                        Err(_t) => false,
+                    };
+                    if h{
+                        break;
                     }
-                    break;
+                }
+                if is_prime_miller_rabine(i){
+                    if let Ok(mut num) = arc_result1.lock(){
+                        if *num == 0{
+                            *num = i;
+                        }
+                        break;
+                    }
                 }
             }
         });
@@ -175,21 +194,25 @@ fn find_prime_async(start:u64, end:u64, go_down:bool) -> u64{
         let arc_result2 = arc_result.clone();
         let threadcancel2 = thread_cancel.clone();
         let handle2 = thread::spawn(move ||{
-            //print_debugging_info(format!("thread {:?} started.", thread::current().id()));
             let range2: Box<dyn Iterator<Item = u64>> = if go_down {Box::new((section1..=section2).rev())} else {Box::new(section1..=section2)};
-           
             for i in range2{
-                if i % 50 == 0 && *threadcancel2.read().unwrap(){
-                    //print_debugging_info(format!("thread {:?} cancelled.", thread::current().id()));
-                    break;
-                }
-                
-                if is_prime_mr(i){
-                    let mut num = arc_result2.lock().unwrap();
-                    if *num == 0{
-                        *num = i;
+                if i % 10 == 0 {
+                    let g = threadcancel2.read();
+                    let h = match g{
+                        Ok(s) => *s,
+                        Err(_t) => false,
+                    };
+                    if h{
+                        break;
                     }
-                    break;
+                }
+                if is_prime_miller_rabine(i){
+                    if let Ok(mut num) = arc_result2.lock(){
+                        if *num == 0{
+                            *num = i;
+                        }
+                        break;
+                    }
                 }
             }
         });
@@ -198,21 +221,26 @@ fn find_prime_async(start:u64, end:u64, go_down:bool) -> u64{
         let arc_result3 = arc_result.clone();
         let threadcancel3 = thread_cancel.clone();
         let handle3 = thread::spawn(move ||{
-            //print_debugging_info(format!("thread {:?} started.", thread::current().id()));
             let range3: Box<dyn Iterator<Item = u64>> = if go_down {Box::new((section2..=section3).rev())} else {Box::new(section2..=section3)};
            
             for i in range3{
-                if i % 50 == 0 &&  *threadcancel3.read().unwrap(){
-                    //print_debugging_info(format!("thread {:?} cancelled.", thread::current().id()));
-                    break;
-                }
-                
-                if is_prime_mr(i){
-                    let mut num = arc_result3.lock().unwrap();
-                    if *num == 0{
-                        *num = i;
+                if i % 10 == 0 {
+                    let g = threadcancel3.read();
+                    let h = match g{
+                        Ok(s) => *s,
+                        Err(_t) => false,
+                    };
+                    if h{
+                        break;
                     }
-                    break;
+                }
+                if is_prime_miller_rabine(i){
+                    if let Ok(mut num) = arc_result3.lock(){
+                        if *num == 0{
+                            *num = i;
+                        }
+                        break;
+                    }
                 }
             }
         });
@@ -222,71 +250,61 @@ fn find_prime_async(start:u64, end:u64, go_down:bool) -> u64{
         let arc_result4 = arc_result.clone();
         let threadcancel4 = thread_cancel.clone();
         let handle4 = thread::spawn(move ||{
-            //print_debugging_info(format!("thread {:?} started.", thread::current().id()));
             let range4: Box<dyn Iterator<Item = u64>> = if go_down {Box::new((section3..=end).rev())} else {Box::new(section3..=end)};
            
             for i in range4{
-                if i % 50 == 0 && *threadcancel4.read().unwrap(){
-                    //print_debugging_info(format!("thread {:?} cancelled.", thread::current().id()));
-                    break;
-                }
-                
-                if is_prime_mr(i){
-                    let mut num = arc_result4.lock().unwrap();
-                    if *num == 0{
-                        *num = i;
+                if i % 10 == 0 {
+                    let g = threadcancel4.read();
+                    let h = match g{
+                        Ok(s) => *s,
+                        Err(_t) => false,
+                    };
+                    if h{
+                        break;
                     }
-                    break;
+                }
+                if is_prime_miller_rabine(i){
+                    if let Ok(mut num) = arc_result4.lock(){
+                        if *num == 0{
+                            *num = i;
+                        }
+                        break;
+                    }
                 }
             }
         });
         arc_handles.push(handle4);
 
-        let threadcancel5 = thread_cancel.clone();
-        let printhandle = thread::spawn(move|| {
-            let mut i = 0;
-            loop{
-                if i >= 10{
-                    i = 0;
-                    println!("Working...");
-                }
-                thread::sleep(Duration::from_millis(500));
-                i += 1;
-                if i % 2 == 0 && *threadcancel5.read().unwrap(){
-                    break;
-                }
-
-                
-            }
-            //println!("printmessage cancelled.");
-        });
-        arc_handles.push(printhandle);
-
-
-
         let threadcancelprint = Mutex::new(thread_cancel.clone());
         for j in arc_handles{
-            let a = j.thread().id();
-            j.join().unwrap();
+            if let Err(s) =  j.join(){
+                panic!("Failed to join multithread. {:?}", s);
+            }
            
-            let arcresult =  arc_result.lock().unwrap();
-            //print_debugging_info(format!("thread {:?} joined with main with value {}.", a, arcresult));
+            let arcresult =  match arc_result.lock(){
+                Ok(s) => s,
+                Err(t) => panic!("Error: {:?}", t),
+            };
 
             if *arcresult != 0 && result == 0{
                 result = *arcresult;
-                let t = threadcancelprint.lock().unwrap();
-                *t.write().unwrap() = true;
-                //print_debugging_info(format!("Cancel issued because thread {:?} joined with main with value {}.", a, arcresult));
+                let t = threadcancelprint.lock().expect("Failed to get lock on thread canceling mutex.");
+                let mut w = match t.write(){
+                    Ok(s) => s,
+                    Err(t) => panic!("error writing to thread canceller: {:?}", t),
+                };
+                *w = true;
+                break;
             }
         }
-        
-
     }
     result
 }
 
-
-
+// Most prime checking is done using Miller-Rabine algorithm, but this is 
+// used to check Miller-Rabine's accuracy. Testing shows my implementation loses
+// a prime about 1 in 10,000 primes. Never found a false positive,
+// (Miller-Rabine says its prime but is_prime says its not.)
 fn is_prime(num:u64) -> bool{
     let sqrt:u64 = (num as f32).sqrt().ceil() as u64;
     for i in 2..sqrt{
@@ -297,24 +315,8 @@ fn is_prime(num:u64) -> bool{
     true
 }
 
-
-fn is_prime_cancellable(num:u64, cancel:Arc<RwLock<bool>>) -> bool{
-    let sqrt:u64 = (num as f32).sqrt().ceil() as u64;
-    for i in 2..sqrt{
-       
-        if i % 100 == 0 && *cancel.read().unwrap(){
-            //print_debugging_info(format!("thread {:?} cancelled from is_prime_cancellable.", thread::current().id()));
-            return false;
-        }
-        
-        if num % i == 0{
-            return false;
-        }
-    }
-    true
-}
-
-pub fn is_prime_mr(num: u64) -> bool {
+// Miller-Rabine algorithm, sets up information and calls miller-rabine test.
+pub fn is_prime_miller_rabine(num: u64) -> bool {
     let one: u64 = 1u64;
     if num <= one || num == 4 {
         return false;
@@ -329,14 +331,15 @@ pub fn is_prime_mr(num: u64) -> bool {
     }
 
     for g in 0..10 {
-        if miller_test(d.clone(), num, g) == false {
+        if miller_rabine_test(d.clone(), num, g) == false {
             return false;
         }
     }
     true
 }
 
-fn miller_test(mut d:u64, num:u64, g:u64) -> bool{
+// Miller-Rabine test called by above function.
+fn miller_rabine_test(mut d:u64, num:u64, g:u64) -> bool{
     let nextrandom = (num / 15) * (g + 1);
     let one: u64 = 1;
     let two: u64 = 2;
@@ -368,7 +371,9 @@ fn miller_test(mut d:u64, num:u64, g:u64) -> bool{
     false
 }
 
-
+// Function to find coprime value, checks supplied number
+// first, then continues up, if not found, starts at 3 and continues
+// up to num. If nothing found (unlikely) panics.
 fn get_a_coprime(num:u64, phi: u64) -> u64{
     
     for i in num..phi{
@@ -386,6 +391,9 @@ fn get_a_coprime(num:u64, phi: u64) -> u64{
     panic!("Unable to find exponent e.");
 }
 
+// Actually checks two numbers for coprime. Basically, an
+// implementation of euclideans algorithm if GCD is 1 returns
+// true.
 fn is_coprime(e:u64, phi:u64) -> bool{
     let mut a = phi;
     let mut b = e;
@@ -407,7 +415,7 @@ fn is_coprime(e:u64, phi:u64) -> bool{
     }
 }
 
-
+// Exctended euclideans algorithem worked recursively.
 fn extended_gcd(a: i128, b: i128) -> (i128, i128, i128) {
     if b == 0 {
         (a, 1, 0)
@@ -480,19 +488,19 @@ fn test_is_coprime(){
 #[test]
 fn test_find_primes(){
     let returns = find_prime(1_000_000_001);
-
+    println!("{:?}", returns);
     assert!(is_prime(returns.0,) && is_prime(returns.1));
 
     let returns1 = find_prime(99_999_999_999);
-
+    println!("{:?}", returns1);
     assert!(is_prime(returns1.0,) && is_prime(returns1.1));
 
     let returns2 = find_prime(4536527634656356);
-
+    println!("{:?}", returns2);
     assert!(is_prime(returns2.0,) && is_prime(returns2.1));
 
     let returns3 = find_prime(3);
-
+    println!("{:?}", returns3);
     assert!(is_prime(returns3.0,) && is_prime(returns3.1));
 }
 
@@ -540,13 +548,13 @@ fn test_extended_euclidean(){
 #[test]
 fn test_is_prime_miller_rabin(){
 
-    assert_eq!(is_prime_mr(3074457345618258599u64), is_prime(3074457345618258599u64));
+    assert_eq!(is_prime_miller_rabine(3074457345618258599u64), is_prime(3074457345618258599u64));
 
-    assert_eq!(is_prime_mr(3074457345618258590u64), is_prime(3074457345618258590u64));
+    assert_eq!(is_prime_miller_rabine(3074457345618258590u64), is_prime(3074457345618258590u64));
 
 
-    assert_eq!(is_prime_mr(8865838643u64), is_prime(8865838643u64));
+    assert_eq!(is_prime_miller_rabine(8865838643u64), is_prime(8865838643u64));
 
-    assert_eq!(is_prime_mr(1537228672809129301u64),is_prime(1537228672809129301u64));
+    assert_eq!(is_prime_miller_rabine(1537228672809129301u64),is_prime(1537228672809129301u64));
     
 }

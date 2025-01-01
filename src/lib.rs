@@ -1,10 +1,11 @@
+// Author: Shannon Musgrave
+
 use std::{sync::{mpsc, Arc}, thread};
-
-
-
 mod utility;
 mod structures;
 
+// Main function called from main.rs. Will run through complete
+// encryption and decryption process.
 pub fn run(){
     // Steps:
     // Get two primes each below u32max p and q.
@@ -17,159 +18,192 @@ pub fn run(){
     // multiplicative inverse d * e = 1 modn
     // to encrypt c = m ^ e modn
     // to decrypt m = c ^ d modn
-loop{
-    let mut myrsainfo = structures::RSAInfo::new();
 
-    utility::get_primes(&mut myrsainfo);
-    println!("");
-    println!("-----------------------------------------------------------------");
-    println!("");
-    utility::get_modulus(&mut myrsainfo);
-    println!("");
-    println!("-----------------------------------------------------------------");
-    println!("");
-    utility::get_phi(&mut myrsainfo);
-    println!("");
-    println!("-----------------------------------------------------------------");
-    println!("");
-    utility::get_e(&mut myrsainfo);  
-    println!("");
-    println!("-----------------------------------------------------------------");
-    println!("");
-    utility::get_d(&mut myrsainfo);
-    println!("");
-    println!("Everything is in place to perform encryption.");
-    println!("");
+    // Start a loop cancelled one user is finished.
+    loop{
+        // Create structure to hold all encryption information.
+        let mut myrsainfo = structures::RSAInfo::new();
 
-    println!("Type in a message that you would like to encrypt.");
+        // Helper method to retrieve primes.
+        utility::get_primes(&mut myrsainfo);
+        println!("");
+        println!("-----------------------------------------------------------------");
+        println!("");
 
-    let input:String = get_user_string();
-    println!("");
-    println!("-----------------------------------------------------------------");
-    println!("");
+        // Helper method to get N (modulus).
+        utility::get_modulus(&mut myrsainfo);
+        println!("");
+        println!("-----------------------------------------------------------------");
+        println!("");
 
-    println!("Great, lets start the process of encryption.");
+        // Get euler totient.
+        utility::get_phi(&mut myrsainfo);
+        println!("");
+        println!("-----------------------------------------------------------------");
+        println!("");
 
-    println!("First, lets convert this to the raw bytes.");
+        // Get exponent e (for encryption).
+        utility::get_e(&mut myrsainfo);  
+        println!("");
+        println!("-----------------------------------------------------------------");
+        println!("");
 
-    let rawbytes:Vec<u8> = convert_raw_bytes(&input);
-    println!("");
-    println!("{:?}", rawbytes);
-    println!("");
-    println!("-----------------------------------------------------------------");
-    println!("");
+        // Get exponent d (for decryption).
+        utility::get_d(&mut myrsainfo);
+        println!("");
+        println!("Everything is in place to perform encryption.");
+        println!("");
 
-    println!("Now we should pad the bytes, we need to create a multiple of 8 bytes since we are performing 64 bit encryption chunks.");
-    println!("We also do this to make sure the bytes are smaller, by inserting a small byte into the most significant byte.");
+        println!("Type in a message that you would like to encrypt.");
 
-    let paddedbytes:Vec<u8> = pad_the_bytes(rawbytes);
-    println!("");
-    println!("{:?}", paddedbytes);
+        // All data is retrieved and in the structure.
+        // Now get string to encrypt from user.
+        let input:String = get_user_string();
+        println!("");
+        println!("-----------------------------------------------------------------");
+        println!("");
 
-    println!("");
-    println!("-----------------------------------------------------------------");
-    println!("");
+        println!("Great, lets start the process of encryption.");
 
-    println!("Now we need to convert these bytes into 64bit integers, remember 8 bytes is one 64bit integer.");
+        println!("First, lets convert this to the raw bytes.");
 
-    let info:Vec<u64> = get_integers(&paddedbytes);
-    println!("");
-    println!("{:?}", info);
+        // Convert string to vector of bytes, rust strings are utf8.
+        let rawbytes:Vec<u8> = convert_raw_bytes(&input);
+        println!("");
+        println!("{:?}", rawbytes);
+        println!("");
+        println!("-----------------------------------------------------------------");
+        println!("");
 
-    println!("");
-    println!("-----------------------------------------------------------------");
-    println!("");
+        println!("Now we should pad the bytes, we need to create a multiple of 8 bytes since we are performing 64 bit encryption chunks.");
+        println!("We also do this to make sure the bytes are smaller, by inserting a small byte into the most significant byte.");
 
-    println!("We can start encrypting these with the information above, to encrypt, it is information ^ e modulus n.");
-    println!("This is the data taken to the {} power modulus {}", myrsainfo.get_e(), myrsainfo.get_n());
-    let mutatedvec:Vec<u64> = encryption_process(info, myrsainfo.get_e(), myrsainfo.get_n());
-    println!("");
-    println!("{:?}", mutatedvec);
+        // Common practice is to pad bytes, simply adding a byte of low value to most significant position.
+        // every 8 bytes. Also making total array length a multiple of 8, since these will be converted to u64 integers.
+        let paddedbytes:Vec<u8> = pad_the_bytes(rawbytes);
+        println!("");
+        println!("{:?}", paddedbytes);
 
-    println!("");
-    println!("-----------------------------------------------------------------");
-    println!("");
+        println!("");
+        println!("-----------------------------------------------------------------");
+        println!("");
 
-    println!("Lets convert these encrypted integers back to bytes.");
+        println!("Now we need to convert these bytes into 64bit integers, remember 8 bytes is one 64bit integer.");
 
-    let encrypted:Vec<u8> = getbytes(mutatedvec);
-    println!("");
-    println!("{:?}", encrypted);
+        // Now to take padded vector of bytes and convert them 8 to 1 to a vector of u64 integers.
+        let info:Vec<u64> = get_integers(&paddedbytes);
+        println!("");
+        println!("{:?}", info);
 
-    println!("");
-    println!("-----------------------------------------------------------------");
-    println!("");
+        println!("");
+        println!("-----------------------------------------------------------------");
+        println!("");
 
-    println!("Now lets decrypt the information. First, we will convert back to 64bit integers.");
+        println!("We can start encrypting these with the information above, to encrypt, it is information ^ e modulus n.");
+        println!("This is the data taken to the {} power modulus {}", myrsainfo.get_e(), myrsainfo.get_n());
 
-    let encryptedintegers = get_integers(&encrypted);
-    println!("");
-    println!("{:?}", encryptedintegers);
+        // Encryption_process will encrypt each u64 integer by applying the exponent and modulus.
+        let mutatedvec:Vec<u64> = encryption_process(info, myrsainfo.get_e(), myrsainfo.get_n());
+        println!("");
+        println!("{:?}", mutatedvec);
 
-    println!("");
-    println!("-----------------------------------------------------------------");
-    println!("");
+        println!("");
+        println!("-----------------------------------------------------------------");
+        println!("");
 
-    println!("Now, we must decrypt the integers using the formula, cypher ^d modulus n.");
-    println!("This is the data taken to the {} power modulus {}", myrsainfo.get_d(), myrsainfo.get_n());
-    let decrypted = encryption_process(encryptedintegers, myrsainfo.get_d(), myrsainfo.get_n());
-    
-    println!("");
-    println!("{:?}", decrypted);
+        println!("Lets convert these encrypted integers back to bytes.");
 
-    println!("");
-    println!("-----------------------------------------------------------------");
-    println!("");
+        // Converting encryption back to an array of bytes.
+        let encrypted:Vec<u8> = getbytes(mutatedvec);
+        println!("");
+        println!("{:?}", encrypted);
 
-    println!("Convert these decrypted integers back to the vector of bytes.");
+        println!("");
+        println!("-----------------------------------------------------------------");
+        println!("");
 
-    let getdecryptedbytes = getbytes(decrypted);
-    println!("");
-    println!("{:?}", getdecryptedbytes);
+        println!("Now lets decrypt the information. First, we will convert back to 64bit integers.");
 
-    println!("");
-    println!("-----------------------------------------------------------------");
-    println!("");
+        // Now that bytes have been encrypted and displayed to user, now lets reverse process and decrypt.
+        // Reverse steps, convert back to u64 ints.
+        let encryptedintegers = get_integers(&encrypted);
+        println!("");
+        println!("{:?}", encryptedintegers);
 
-    println!("We need to depad this string to get to our original string.");
+        println!("");
+        println!("-----------------------------------------------------------------");
+        println!("");
 
-    let depadded = depad_the_bytes(getdecryptedbytes);
-    println!("");
-    println!("{:?}", depadded);
+        println!("Now, we must decrypt the integers using the formula, cypher ^d modulus n.");
+        println!("This is the data taken to the {} power modulus {}", myrsainfo.get_d(), myrsainfo.get_n());
 
-    println!("");
-    println!("-----------------------------------------------------------------");
-    println!("");
+        // Same function decrypts just using the other exponent.
+        let decrypted = encryption_process(encryptedintegers, myrsainfo.get_d(), myrsainfo.get_n());
+        
+        println!("");
+        println!("{:?}", decrypted);
+
+        println!("");
+        println!("-----------------------------------------------------------------");
+        println!("");
+
+        println!("Convert these decrypted integers back to the vector of bytes.");
+
+        // Get bytes from integers.
+        let getdecryptedbytes = getbytes(decrypted);
+        println!("");
+        println!("{:?}", getdecryptedbytes);
+
+        println!("");
+        println!("-----------------------------------------------------------------");
+        println!("");
+
+        println!("We need to depad this string to get to our original string.");
+
+        // Reverse the padding process by removing each 8th byte.
+        let depadded = depad_the_bytes(getdecryptedbytes);
+        println!("");
+        println!("{:?}", depadded);
+
+        println!("");
+        println!("-----------------------------------------------------------------");
+        println!("");
 
 
-    println!("Lets convert this back to text.");
-    let stringresult = String::from_utf8(depadded);
-    let stringres = match stringresult{
-        Ok(s) => s,
-        Err(_) => String::from("Error. The program was unable to retrieve the orignal string."),
-    };
-    println!("");
-    println!("{}", stringres);
+        println!("Lets convert this back to text.");
 
-    println!("Congratulations, you have encrypted and decrypted a message using RSA assymetric encryption.");
+        // Use utf8 function to return bytes, since it should be the original string, the string should be in 
+        // well formed utf8 format. If its not we handle the error in the match statement.
+        let stringresult = String::from_utf8(depadded);
+        let stringres = match stringresult{
+            Ok(s) => s,
+            Err(_) => String::from("Error. The program was unable to retrieve the orignal string."),
+        };
+        println!("");
+        println!("{}", stringres);
+
+        println!("Congratulations, you have encrypted and decrypted a message using RSA assymetric encryption.");
 
 
-    println!("Would you like to try again. Type Y to try again.");
-    let mut str = String::new();
-    std::io::stdin().read_line(&mut str).unwrap();
+        // Simple match for checking with user, if they type a variation of y in, process restarts.
 
-    match str.trim(){
-        "Y" => {},
-        "y" => {},
-        "yes" => {},
-        "YES" => {},
-        _ => {break;}   
-     }
+        println!("Would you like to try again. Type Y to try again.");
+        let mut str = String::new();
+        std::io::stdin().read_line(&mut str).unwrap();
+
+        match str.trim(){
+            "Y" => {},
+            "y" => {},
+            "yes" => {},
+            "YES" => {},
+            _ => {break;}   
+        }
+    }
+
+    println!("Thanks for using the RSA encryption process app.");
 }
-   
 
-}
-
+// Get bytes turns vector of u64 (8 bytes) into byte vector.
 fn getbytes(input:Vec<u64>) -> Vec<u8> {
     let mut result:Vec<u8> = Vec::new();
     for i in input.into_iter(){
@@ -182,7 +216,7 @@ fn getbytes(input:Vec<u64>) -> Vec<u8> {
     result
 }
 
-
+// Main function which takes a vector of u64 and applies exponent and modulus then returns.
 fn encryption_process(message:Vec<u64>, exp:u64, modulus:u64) -> Vec<u64> {
 
     let mut place = 0;
@@ -243,6 +277,7 @@ fn encryption_process(message:Vec<u64>, exp:u64, modulus:u64) -> Vec<u64> {
     result
 }
 
+// Converts bytes into vector of u64 integers.
 fn get_integers(message: &[u8]) -> Vec<u64> {
     let mut list:Vec<u64> = Vec::new();
 
@@ -265,6 +300,8 @@ fn get_integers(message: &[u8]) -> Vec<u64> {
     list
 }
 
+// Removes the added bytes throughout the message and those at end.
+// Bytes at end are added to make vector a multiple of 8.
 fn depad_the_bytes(rawbytes:Vec<u8>) -> Vec<u8>{
     let mut result:Vec<u8> = Vec::new();
 
@@ -280,7 +317,10 @@ fn depad_the_bytes(rawbytes:Vec<u8>) -> Vec<u8>{
 
     result
 }
-
+// Adds a byte everry 7 bytes to add randomness and keep
+// integer value lower (most sig byte is rotated between 0 and 3).
+// Bytes added to end to create multiple of 8. So that the message
+// can be converted into array of u64 integers.
 fn pad_the_bytes(rawbytes: Vec<u8>) -> Vec<u8> {
     let mut result: Vec<u8> = Vec::new();
 
@@ -301,12 +341,13 @@ fn pad_the_bytes(rawbytes: Vec<u8>) -> Vec<u8> {
     result
 }
 
+// Convert utf8 string into vector of bytes.
 fn convert_raw_bytes(input: &str) -> Vec<u8>{
-   
     let bytes = input.as_bytes().to_vec();
     bytes
 }
 
+// Ask user for string to process.
 fn get_user_string() -> String  {
     let mut input = String::new();
 
@@ -316,7 +357,8 @@ fn get_user_string() -> String  {
     trimmed
 }
 
-
+// Modded exponentiation, keeps values low by applying modulus each cycle.
+// Also uses logic to increase speed.
 fn modded_exponent(base:u64, exp:u64, modulus:u64) -> u64{
     if base == 0u64 || exp == 0u64 || modulus == 0u64{
         panic!("Cannot perform exponents on 0.");

@@ -1,3 +1,5 @@
+
+// Main entry point of application, calls library after greeting.
 fn main() {
     println!("");
     println!("-----------------------------------------------------------------");
@@ -8,5 +10,6 @@ fn main() {
     println!("-----------------------------------------------------------------");
     println!("-----------------------------------------------------------------");
     println!("");
+    // Run method is main running/looping function in library.
     rsaencryptiontutorial::run();
 }
