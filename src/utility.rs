@@ -1,5 +1,5 @@
 use crate::{modded_exponent, structures::RSAInfo};
-use std::{io::{self, Write}, sync::{atomic::{AtomicBool, Ordering}, Arc, Mutex, RwLock}, thread};
+use std::{io::{self, Write}, sync::{atomic::{AtomicBool, Ordering}, Arc, Mutex}, thread};
 
 const PRIME_MAX:u64 = u64::MAX / 3;
 

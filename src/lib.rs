@@ -1,6 +1,6 @@
 // Author: Shannon Musgrave
 
-use std::{io, sync::{mpsc, Arc}, thread, time::Duration};
+use std::{sync::{mpsc, Arc}, thread};
 mod utility;
 mod structures;
 
