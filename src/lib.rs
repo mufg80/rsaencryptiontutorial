@@ -1,6 +1,6 @@
 // Author: Shannon Musgrave
 
-use std::{sync::{mpsc, Arc}, thread};
+use std::{io, sync::{mpsc, Arc}, thread, time::Duration};
 mod utility;
 mod structures;
 
@@ -71,6 +71,8 @@ pub fn run(){
         let rawbytes:Vec<u8> = convert_raw_bytes(&input);
         println!("");
         println!("{:?}", rawbytes);
+        println!("Press enter to continue.");
+        _ = get_user_string();
         println!("");
         println!("-----------------------------------------------------------------");
         println!("");
@@ -84,6 +86,8 @@ pub fn run(){
         println!("");
         println!("{:?}", paddedbytes);
 
+        println!("Press enter to continue.");
+        _ = get_user_string();
         println!("");
         println!("-----------------------------------------------------------------");
         println!("");
@@ -94,7 +98,9 @@ pub fn run(){
         let info:Vec<u64> = get_integers(&paddedbytes);
         println!("");
         println!("{:?}", info);
-
+       
+        println!("Press enter to continue.");
+        _ = get_user_string();
         println!("");
         println!("-----------------------------------------------------------------");
         println!("");
@@ -106,18 +112,22 @@ pub fn run(){
         let mutatedvec:Vec<u64> = encryption_process(info, myrsainfo.get_e(), myrsainfo.get_n());
         println!("");
         println!("{:?}", mutatedvec);
-
+       
+        println!("Press enter to continue.");
+        _ = get_user_string();
         println!("");
         println!("-----------------------------------------------------------------");
         println!("");
 
         println!("Lets convert these encrypted integers back to bytes.");
-
+        println!("This is our encrypted array of bytes.");
         // Converting encryption back to an array of bytes.
         let encrypted:Vec<u8> = getbytes(mutatedvec);
         println!("");
         println!("{:?}", encrypted);
-
+       
+        println!("Press enter to continue.");
+        _ = get_user_string();
         println!("");
         println!("-----------------------------------------------------------------");
         println!("");
@@ -129,7 +139,9 @@ pub fn run(){
         let encryptedintegers = get_integers(&encrypted);
         println!("");
         println!("{:?}", encryptedintegers);
-
+        
+        println!("Press enter to continue.");
+        _ = get_user_string();
         println!("");
         println!("-----------------------------------------------------------------");
         println!("");
@@ -142,7 +154,9 @@ pub fn run(){
         
         println!("");
         println!("{:?}", decrypted);
-
+        
+        println!("Press enter to continue.");
+        _ = get_user_string();
         println!("");
         println!("-----------------------------------------------------------------");
         println!("");
@@ -153,7 +167,9 @@ pub fn run(){
         let getdecryptedbytes = getbytes(decrypted);
         println!("");
         println!("{:?}", getdecryptedbytes);
-
+        
+        println!("Press enter to continue.");
+        _ = get_user_string();
         println!("");
         println!("-----------------------------------------------------------------");
         println!("");
@@ -164,7 +180,9 @@ pub fn run(){
         let depadded = depad_the_bytes(getdecryptedbytes);
         println!("");
         println!("{:?}", depadded);
-
+        
+        println!("Press enter to continue.");
+        _ = get_user_string();
         println!("");
         println!("-----------------------------------------------------------------");
         println!("");
@@ -188,10 +206,10 @@ pub fn run(){
         // Simple match for checking with user, if they type a variation of y in, process restarts.
 
         println!("Would you like to try again. Type Y to try again.");
-        let mut str = String::new();
-        std::io::stdin().read_line(&mut str).unwrap();
+       
+        let s = get_user_string();
 
-        match str.trim(){
+        match &s[..]{
             "Y" => {},
             "y" => {},
             "yes" => {},

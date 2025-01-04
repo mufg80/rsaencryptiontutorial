@@ -1,5 +1,5 @@
 use crate::{modded_exponent, structures::RSAInfo};
-use std::{io::{self, Write}, sync::{Arc, Mutex, RwLock}, thread};
+use std::{io::{self, Write}, sync::{atomic::{AtomicBool, Ordering}, Arc, Mutex, RwLock}, thread};
 
 const PRIME_MAX:u64 = u64::MAX / 3;
 
@@ -104,6 +104,8 @@ pub fn get_d(info: &mut RSAInfo) {
     }
     let val = (data.1 % eul + eul) % eul;
     info.set_d(val as u64);
+    println!("D must be the multiplicative inverse: d * e = 1 mod N");
+    println!("We will find this using euclideans extended algorithm.");
     println!("{} is exponent d.", val as u64);
 }
 
@@ -160,7 +162,7 @@ fn find_prime_async(start:u64, end:u64, go_down:bool) -> u64{
         let section2 = start + (chunk * 2);
         let section3 = start + (chunk * 3);
         let arc_result = Arc::new(Mutex::new(0u64));
-        let thread_cancel = Arc::new(RwLock::new(false));
+        let thread_cancel = Arc::new(AtomicBool::new(false));
         let mut arc_handles = vec![];
 
         let arc_result1 = arc_result.clone();
@@ -170,12 +172,9 @@ fn find_prime_async(start:u64, end:u64, go_down:bool) -> u64{
            
             for i in range1{
                 if i % 10 == 0 {
-                    let g = threadcancel1.read();
-                    let h = match g{
-                        Ok(s) => *s,
-                        Err(_t) => false,
-                    };
-                    if h{
+                    let g = threadcancel1.load(Ordering::Relaxed);
+                    
+                    if g{
                         break;
                     }
                 }
@@ -197,12 +196,9 @@ fn find_prime_async(start:u64, end:u64, go_down:bool) -> u64{
             let range2: Box<dyn Iterator<Item = u64>> = if go_down {Box::new((section1..=section2).rev())} else {Box::new(section1..=section2)};
             for i in range2{
                 if i % 10 == 0 {
-                    let g = threadcancel2.read();
-                    let h = match g{
-                        Ok(s) => *s,
-                        Err(_t) => false,
-                    };
-                    if h{
+                    let g = threadcancel2.load(Ordering::Relaxed);
+                    
+                    if g{
                         break;
                     }
                 }
@@ -225,12 +221,9 @@ fn find_prime_async(start:u64, end:u64, go_down:bool) -> u64{
            
             for i in range3{
                 if i % 10 == 0 {
-                    let g = threadcancel3.read();
-                    let h = match g{
-                        Ok(s) => *s,
-                        Err(_t) => false,
-                    };
-                    if h{
+                    let g = threadcancel3.load(Ordering::Relaxed);
+                    
+                    if g{
                         break;
                     }
                 }
@@ -254,12 +247,9 @@ fn find_prime_async(start:u64, end:u64, go_down:bool) -> u64{
            
             for i in range4{
                 if i % 10 == 0 {
-                    let g = threadcancel4.read();
-                    let h = match g{
-                        Ok(s) => *s,
-                        Err(_t) => false,
-                    };
-                    if h{
+                    let g = threadcancel4.load(Ordering::Relaxed);
+                    
+                    if g{
                         break;
                     }
                 }
@@ -274,8 +264,7 @@ fn find_prime_async(start:u64, end:u64, go_down:bool) -> u64{
             }
         });
         arc_handles.push(handle4);
-
-        let threadcancelprint = Mutex::new(thread_cancel.clone());
+        let threadcanceler = thread_cancel.clone();
         for j in arc_handles{
             if let Err(s) =  j.join(){
                 panic!("Failed to join multithread. {:?}", s);
@@ -288,12 +277,7 @@ fn find_prime_async(start:u64, end:u64, go_down:bool) -> u64{
 
             if *arcresult != 0 && result == 0{
                 result = *arcresult;
-                let t = threadcancelprint.lock().expect("Failed to get lock on thread canceling mutex.");
-                let mut w = match t.write(){
-                    Ok(s) => s,
-                    Err(t) => panic!("error writing to thread canceller: {:?}", t),
-                };
-                *w = true;
+                threadcanceler.store(true, Ordering::Relaxed);
                 break;
             }
         }
