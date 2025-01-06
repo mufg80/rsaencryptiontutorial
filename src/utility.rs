@@ -1,5 +1,5 @@
 use crate::{modded_exponent, structures::RSAInfo};
-use std::{io::{self, Write}, sync::{atomic::{AtomicBool, Ordering}, Arc, Mutex}, thread};
+use std::{io::{self, Read, Write}, sync::{atomic::{AtomicBool, Ordering}, Arc, Mutex}, thread::{self, spawn}, time::{Duration, Instant}};
 
 const PRIME_MAX:u64 = u64::MAX / 3;
 
@@ -155,6 +155,13 @@ fn find_prime_async(start:u64, end:u64, go_down:bool) -> u64{
                 break;
             }
         }
+    }else if total < 500{
+        for i in range{
+            if is_prime_async(i){
+                result = i;
+                break;
+            }
+        }
     }else{
         
         let chunk = total / 4;
@@ -299,10 +306,104 @@ fn is_prime(num:u64) -> bool{
     true
 }
 
+fn is_prime_async(num:u64) -> bool{
+    if num % 2 == 0 || num % 3 == 0{
+        return false;
+    }
+    let sqrt:u64 = (num as f32).sqrt().ceil() as u64;
+    let quarter:u64 = sqrt / 4;
+    let half:u64 = sqrt / 2;
+    let threequarter = quarter + half;
+
+    let isprime = Arc::new(Mutex::new(true));
+
+    let mut handles = vec![];
+    let isprime1 = isprime.clone();
+    let handle1 = thread::spawn(move || {
+        for j in 4..quarter{
+           
+            if num % j == 0{
+                let l = isprime1.lock();
+                let mut g = match l{
+                    Ok(s) => s,
+                    Err(_) => panic!("failed to spawn thread."),
+                };
+                *g = false;
+                return;
+            }
+        }       
+    });
+    handles.push(handle1);
+
+    let isprime2 = isprime.clone();
+    let handle2 = thread::spawn(move || {
+        for j in quarter..half{
+           
+            if num % j == 0{
+                let l = isprime2.lock();
+                let mut g = match l{
+                    Ok(s) => s,
+                    Err(_) => panic!("failed to spawn thread."),
+                };
+                *g = false;
+                return;
+            }
+        }       
+    });
+    handles.push(handle2);
+
+    let isprime3 = isprime.clone();
+    let handle3 = thread::spawn(move || {
+        for j in half..threequarter{
+           
+            if num % j == 0{
+                let l = isprime3.lock();
+                let mut g = match l{
+                    Ok(s) => s,
+                    Err(_) => panic!("failed to spawn thread."),
+                };
+                *g = false;
+                return;
+            }
+        }       
+    });
+    handles.push(handle3);
+
+    let isprime4 = isprime.clone();
+    let handle4 = thread::spawn(move || {
+        for j in threequarter..sqrt{
+           
+            if num % j == 0{
+                let l = isprime4.lock();
+                let mut g = match l{
+                    Ok(s) => s,
+                    Err(_) => panic!("failed to spawn thread."),
+                };
+                *g = false;
+                return;
+            }
+        }       
+    });
+    handles.push(handle4);
+
+
+    let mut result:bool = true;
+    for h in handles{
+        h.join().unwrap();
+        if !(*isprime.lock().unwrap()){
+            result = false;
+            return result;
+        }
+        
+    }
+   result
+    
+}
+
 // Miller-Rabine algorithm, sets up information and calls miller-rabine test.
 pub fn is_prime_miller_rabine(num: u64) -> bool {
     let one: u64 = 1u64;
-    if num <= one || num == 4 {
+    if num <= one || num == 4 || num % 2 == 0 || num % 3 == 0{
         return false;
     }
     if num <= 3 {
@@ -329,9 +430,6 @@ fn miller_rabine_test(mut d:u64, num:u64, g:u64) -> bool{
     let two: u64 = 2;
     let a = 2 + nextrandom;
 
-    if a == 0{
-        println!("whoops.");
-    }
     let mut x = modded_exponent(a, d, num);
 
     if x == one || x == num - one {
@@ -339,11 +437,16 @@ fn miller_rabine_test(mut d:u64, num:u64, g:u64) -> bool{
     }
     while d <= (num - one) {
         if x == 0{
-            println!("whoops.");
             return false;
         }
         x = modded_exponent(x, 2, num);
-        d *= two;
+
+        if u64::MAX / 2 >= d{
+            d *= two;
+        }else{
+            return false;
+        }
+        
 
         if x == one {
             return false;
@@ -492,14 +595,46 @@ fn test_find_primes(){
 fn test_is_primes(){
     let prime = 3074457345618258599u64;
     let nonprime = 29999388238928890u64;
+    let g = is_prime(prime);
+    let h = is_prime(nonprime);
+    assert_eq!(g, true);
+    assert_eq!(h, false);
 
-    assert_eq!(is_prime(prime), true);
-    assert_eq!(is_prime(nonprime), false);
-
-    let prime1 = 1537228672809129301u64;
+    let prime1 = 3074457345618258599u64;
     let nonprime1 = 29999388238928890u64;
-    assert_eq!(is_prime(prime1), true);
-    assert_eq!(is_prime(nonprime1), false);
+    let i = is_prime(prime1);
+    let j = is_prime(nonprime1);
+    assert_eq!(i, true);
+    assert_eq!(j, false);
+}
+
+#[test]
+fn test_is_primesasync(){
+    let prime = 3074457345618258599u64;
+    let nonprime = 29999388238928890u64;
+    let g = is_prime_async(prime);   
+    let h = is_prime_async(nonprime);
+    assert_eq!(g, true);
+    assert_eq!(h, false);
+
+    let prime1 = 18446744073709551557u64;
+    let nonprime1 = 29999388238928890u64;
+    let i = is_prime_async(prime1);
+    let j = is_prime_async(nonprime1);
+    assert_eq!(i, true);
+    assert_eq!(j, false); 
+
+    assert_eq!(is_prime_async(3074457345618258599u64), is_prime(3074457345618258599u64));
+
+    assert_eq!(is_prime_async(3074457345618258590u64), is_prime(3074457345618258590u64));
+
+
+    assert_eq!(is_prime_async(8865838643u64), is_prime(8865838643u64));
+
+    assert_eq!(is_prime_async(1537228672809129301u64),is_prime(1537228672809129301u64));
+
+    assert_eq!(is_prime_async(18446744073709551557u64),is_prime(18446744073709551557u64));
+
 }
 
 #[test]
@@ -540,5 +675,39 @@ fn test_is_prime_miller_rabin(){
     assert_eq!(is_prime_miller_rabine(8865838643u64), is_prime(8865838643u64));
 
     assert_eq!(is_prime_miller_rabine(1537228672809129301u64),is_prime(1537228672809129301u64));
+
+    assert_eq!(is_prime_miller_rabine(18446744073709551557u64),is_prime(18446744073709551557u64));
     
+}
+
+#[test]
+fn test_isprimespeeds(){
+
+    let now = Instant::now();
+    let _answer = is_prime_miller_rabine(18446744073709551557u64);
+    let _answer1 = is_prime_miller_rabine(1537228672809129301u64);
+    let _answer2 = is_prime_miller_rabine(8865838643u64);
+    let _answewr3 = is_prime_miller_rabine(3074457345618258590u64);
+    let _answer4 = is_prime_miller_rabine(3074457345618258599u64);
+    let el = now.elapsed();
+    println!("Miller_Rabine took: {:?} seconds.", el);
+
+    let now = Instant::now();
+    let _answer = is_prime_async(18446744073709551557u64);
+    let _answer1 = is_prime_async(1537228672809129301u64);
+    let _answer2 = is_prime_async(8865838643u64);
+    let _answewr3 = is_prime_async(3074457345618258590u64);
+    let _answer4 = is_prime_async(3074457345618258599u64);
+    let el = now.elapsed();
+    println!("Is_prime_async took: {:?} seconds.", el);
+
+    // let now = Instant::now();
+    // let _answer = is_prime(18446744073709551557u64);
+    // let _answer1 = is_prime(1537228672809129301u64);
+    // let _answer2 = is_prime(8865838643u64);
+    // let _answewr3 = is_prime(3074457345618258590u64);
+    // let _answer4 = is_prime(3074457345618258599u64);
+    // let el = now.elapsed();
+    // println!("Is_prime took: {:?} seconds.", el);
+
 }
