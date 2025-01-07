@@ -1,5 +1,5 @@
 use crate::{modded_exponent, structures::RSAInfo};
-use std::{io::{self, Read, Write}, sync::{atomic::{AtomicBool, Ordering}, Arc, Mutex}, thread::{self, spawn}, time::{Duration, Instant}};
+use std::{io::{self, Write}, sync::{Arc, Mutex}, thread::{self}};
 
 const PRIME_MAX:u64 = u64::MAX / 3;
 
@@ -169,25 +169,15 @@ fn find_prime_async(start:u64, end:u64, go_down:bool) -> u64{
         let section2 = start + (chunk * 2);
         let section3 = start + (chunk * 3);
         let arc_result = Arc::new(Mutex::new(0u64));
-        let thread_cancel = Arc::new(AtomicBool::new(false));
         let mut arc_handles = vec![];
 
         let arc_result1 = arc_result.clone();
-        let threadcancel1 = thread_cancel.clone();
         let handle1 = thread::spawn(move ||{
-            let range1: Box<dyn Iterator<Item = u64>> = if go_down {Box::new((start..=section1).rev())} else {Box::new(start..=section1)};
-           
+            let range1: Box<dyn Iterator<Item = u64>> = if go_down {Box::new((start..=section1).rev())} else {Box::new(start..=section1)};           
             for i in range1{
-                if i % 10 == 0 {
-                    let g = threadcancel1.load(Ordering::Relaxed);
-                    
-                    if g{
-                        break;
-                    }
-                }
                 if is_prime_miller_rabine(i){
                     if let Ok(mut num) = arc_result1.lock(){
-                        if *num == 0{
+                        if *num < i{
                             *num = i;
                         }
                         break;
@@ -198,20 +188,12 @@ fn find_prime_async(start:u64, end:u64, go_down:bool) -> u64{
         arc_handles.push(handle1);
 
         let arc_result2 = arc_result.clone();
-        let threadcancel2 = thread_cancel.clone();
         let handle2 = thread::spawn(move ||{
             let range2: Box<dyn Iterator<Item = u64>> = if go_down {Box::new((section1..=section2).rev())} else {Box::new(section1..=section2)};
-            for i in range2{
-                if i % 10 == 0 {
-                    let g = threadcancel2.load(Ordering::Relaxed);
-                    
-                    if g{
-                        break;
-                    }
-                }
+            for i in range2{               
                 if is_prime_miller_rabine(i){
                     if let Ok(mut num) = arc_result2.lock(){
-                        if *num == 0{
+                        if *num < i{
                             *num = i;
                         }
                         break;
@@ -222,21 +204,12 @@ fn find_prime_async(start:u64, end:u64, go_down:bool) -> u64{
         arc_handles.push(handle2);
 
         let arc_result3 = arc_result.clone();
-        let threadcancel3 = thread_cancel.clone();
         let handle3 = thread::spawn(move ||{
-            let range3: Box<dyn Iterator<Item = u64>> = if go_down {Box::new((section2..=section3).rev())} else {Box::new(section2..=section3)};
-           
+            let range3: Box<dyn Iterator<Item = u64>> = if go_down {Box::new((section2..=section3).rev())} else {Box::new(section2..=section3)};           
             for i in range3{
-                if i % 10 == 0 {
-                    let g = threadcancel3.load(Ordering::Relaxed);
-                    
-                    if g{
-                        break;
-                    }
-                }
                 if is_prime_miller_rabine(i){
                     if let Ok(mut num) = arc_result3.lock(){
-                        if *num == 0{
+                        if *num < i{
                             *num = i;
                         }
                         break;
@@ -248,21 +221,12 @@ fn find_prime_async(start:u64, end:u64, go_down:bool) -> u64{
 
 
         let arc_result4 = arc_result.clone();
-        let threadcancel4 = thread_cancel.clone();
         let handle4 = thread::spawn(move ||{
-            let range4: Box<dyn Iterator<Item = u64>> = if go_down {Box::new((section3..=end).rev())} else {Box::new(section3..=end)};
-           
+            let range4: Box<dyn Iterator<Item = u64>> = if go_down {Box::new((section3..=end).rev())} else {Box::new(section3..=end)};           
             for i in range4{
-                if i % 10 == 0 {
-                    let g = threadcancel4.load(Ordering::Relaxed);
-                    
-                    if g{
-                        break;
-                    }
-                }
                 if is_prime_miller_rabine(i){
                     if let Ok(mut num) = arc_result4.lock(){
-                        if *num == 0{
+                        if *num < i{
                             *num = i;
                         }
                         break;
@@ -271,7 +235,6 @@ fn find_prime_async(start:u64, end:u64, go_down:bool) -> u64{
             }
         });
         arc_handles.push(handle4);
-        let threadcanceler = thread_cancel.clone();
         for j in arc_handles{
             if let Err(s) =  j.join(){
                 panic!("Failed to join multithread. {:?}", s);
@@ -281,10 +244,9 @@ fn find_prime_async(start:u64, end:u64, go_down:bool) -> u64{
                 Ok(s) => s,
                 Err(t) => panic!("Error: {:?}", t),
             };
-
-            if *arcresult != 0 && result == 0{
+            println!("result is : {}", arcresult);
+            if *arcresult != 0{
                 result = *arcresult;
-                threadcanceler.store(true, Ordering::Relaxed);
                 break;
             }
         }
@@ -683,7 +645,7 @@ fn test_is_prime_miller_rabin(){
 #[test]
 fn test_isprimespeeds(){
 
-    let now = Instant::now();
+    let now = std::time::Instant::now();
     let _answer = is_prime_miller_rabine(18446744073709551557u64);
     let _answer1 = is_prime_miller_rabine(1537228672809129301u64);
     let _answer2 = is_prime_miller_rabine(8865838643u64);
@@ -692,7 +654,7 @@ fn test_isprimespeeds(){
     let el = now.elapsed();
     println!("Miller_Rabine took: {:?} seconds.", el);
 
-    let now = Instant::now();
+    let now = std::time::Instant::now();
     let _answer = is_prime_async(18446744073709551557u64);
     let _answer1 = is_prime_async(1537228672809129301u64);
     let _answer2 = is_prime_async(8865838643u64);
@@ -701,13 +663,13 @@ fn test_isprimespeeds(){
     let el = now.elapsed();
     println!("Is_prime_async took: {:?} seconds.", el);
 
-    // let now = Instant::now();
-    // let _answer = is_prime(18446744073709551557u64);
-    // let _answer1 = is_prime(1537228672809129301u64);
-    // let _answer2 = is_prime(8865838643u64);
-    // let _answewr3 = is_prime(3074457345618258590u64);
-    // let _answer4 = is_prime(3074457345618258599u64);
-    // let el = now.elapsed();
-    // println!("Is_prime took: {:?} seconds.", el);
+    let now = std::time::Instant::now();
+    let _answer = is_prime(18446744073709551557u64);
+    let _answer1 = is_prime(1537228672809129301u64);
+    let _answer2 = is_prime(8865838643u64);
+    let _answewr3 = is_prime(3074457345618258590u64);
+    let _answer4 = is_prime(3074457345618258599u64);
+    let el = now.elapsed();
+    println!("Is_prime took: {:?} seconds.", el);
 
 }
