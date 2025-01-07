@@ -1,6 +1,6 @@
 // Author: Shannon Musgrave
 
-use std::{sync::{mpsc, Arc}, thread};
+use std::{panic, sync::{mpsc, Arc}, thread};
 mod utility;
 mod structures;
 
@@ -430,20 +430,6 @@ fn test_encryption_process1(){
 }
 
 #[test]
-fn test_encryption_process2(){
-    let mut r = crate::structures::RSAInfo::new();
-    r.set_p(61);
-    r.set_q(53);
-    r.set_n(3233);
-    r.set_phi(3120);
-    r.set_e(17);
-    r.set_d(2753);
-
-
-}
-
-
-#[test]
 fn test_modded_exponent(){
     let input:u64 = 500;
 
@@ -451,6 +437,12 @@ fn test_modded_exponent(){
 
     assert_eq!(17u64, input);
 
+}
+
+#[test]
+fn test_modded_exponent_panic(){
+    let result = panic::catch_unwind(|| modded_exponent(0, 5, 66));
+    assert!(result.is_err());
 }
 
 
@@ -471,7 +463,6 @@ fn test_pad_the_bytes(){
 fn test_getbytes(){
     let g:Vec<u64> = vec![2983,389,297,2982];
     let r = getbytes(g);
-    println!("{:?}",r);
     let t:Vec<u8> = vec![167, 11, 0, 0, 0, 0, 0, 0, 133, 1, 0, 0, 0, 0, 0, 0, 41, 1, 0, 0, 0, 0, 0, 0, 166, 11, 0, 0, 0, 0, 0, 0];
     assert_eq!(r, t);
 }

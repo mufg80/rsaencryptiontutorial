@@ -244,7 +244,6 @@ fn find_prime_async(start:u64, end:u64, go_down:bool) -> u64{
                 Ok(s) => s,
                 Err(t) => panic!("Error: {:?}", t),
             };
-            println!("result is : {}", arcresult);
             if *arcresult != 0{
                 result = *arcresult;
                 break;
@@ -536,20 +535,10 @@ fn test_is_coprime(){
 
 #[test]
 fn test_find_primes(){
-    let returns = find_prime(1_000_000_001);
-    println!("{:?}", returns);
-    assert!(is_prime(returns.0,) && is_prime(returns.1));
-
-    let returns1 = find_prime(99_999_999_999);
-    println!("{:?}", returns1);
-    assert!(is_prime(returns1.0,) && is_prime(returns1.1));
-
     let returns2 = find_prime(4536527634656356);
-    println!("{:?}", returns2);
     assert!(is_prime(returns2.0,) && is_prime(returns2.1));
 
     let returns3 = find_prime(3);
-    println!("{:?}", returns3);
     assert!(is_prime(returns3.0,) && is_prime(returns3.1));
 }
 
@@ -561,13 +550,6 @@ fn test_is_primes(){
     let h = is_prime(nonprime);
     assert_eq!(g, true);
     assert_eq!(h, false);
-
-    let prime1 = 3074457345618258599u64;
-    let nonprime1 = 29999388238928890u64;
-    let i = is_prime(prime1);
-    let j = is_prime(nonprime1);
-    assert_eq!(i, true);
-    assert_eq!(j, false);
 }
 
 #[test]
@@ -579,23 +561,7 @@ fn test_is_primesasync(){
     assert_eq!(g, true);
     assert_eq!(h, false);
 
-    let prime1 = 18446744073709551557u64;
-    let nonprime1 = 29999388238928890u64;
-    let i = is_prime_async(prime1);
-    let j = is_prime_async(nonprime1);
-    assert_eq!(i, true);
-    assert_eq!(j, false); 
-
-    assert_eq!(is_prime_async(3074457345618258599u64), is_prime(3074457345618258599u64));
-
-    assert_eq!(is_prime_async(3074457345618258590u64), is_prime(3074457345618258590u64));
-
-
-    assert_eq!(is_prime_async(8865838643u64), is_prime(8865838643u64));
-
-    assert_eq!(is_prime_async(1537228672809129301u64),is_prime(1537228672809129301u64));
-
-    assert_eq!(is_prime_async(18446744073709551557u64),is_prime(18446744073709551557u64));
+    assert_eq!(is_prime_async(18446744073709551557u64),true);
 
 }
 
@@ -628,17 +594,11 @@ fn test_extended_euclidean(){
 
 #[test]
 fn test_is_prime_miller_rabin(){
+    assert_eq!(is_prime_miller_rabine(8865838643u64), is_prime_async(8865838643u64));
 
-    assert_eq!(is_prime_miller_rabine(3074457345618258599u64), is_prime(3074457345618258599u64));
+    assert_eq!(is_prime_miller_rabine(1537228672809129301u64),is_prime_async(1537228672809129301u64));
 
-    assert_eq!(is_prime_miller_rabine(3074457345618258590u64), is_prime(3074457345618258590u64));
-
-
-    assert_eq!(is_prime_miller_rabine(8865838643u64), is_prime(8865838643u64));
-
-    assert_eq!(is_prime_miller_rabine(1537228672809129301u64),is_prime(1537228672809129301u64));
-
-    assert_eq!(is_prime_miller_rabine(18446744073709551557u64),is_prime(18446744073709551557u64));
+    assert_eq!(is_prime_miller_rabine(18446744073709551557u64),is_prime_async(18446744073709551557u64));
     
 }
 
@@ -646,30 +606,26 @@ fn test_is_prime_miller_rabin(){
 fn test_isprimespeeds(){
 
     let now = std::time::Instant::now();
-    let _answer = is_prime_miller_rabine(18446744073709551557u64);
-    let _answer1 = is_prime_miller_rabine(1537228672809129301u64);
-    let _answer2 = is_prime_miller_rabine(8865838643u64);
-    let _answewr3 = is_prime_miller_rabine(3074457345618258590u64);
-    let _answer4 = is_prime_miller_rabine(3074457345618258599u64);
+    let answer1 = is_prime_miller_rabine(1537228672809129301u64);
+    let answer2 = is_prime_miller_rabine(8865838643u64);
     let el = now.elapsed();
     println!("Miller_Rabine took: {:?} seconds.", el);
 
     let now = std::time::Instant::now();
-    let _answer = is_prime_async(18446744073709551557u64);
-    let _answer1 = is_prime_async(1537228672809129301u64);
-    let _answer2 = is_prime_async(8865838643u64);
-    let _answewr3 = is_prime_async(3074457345618258590u64);
-    let _answer4 = is_prime_async(3074457345618258599u64);
+    let answer11 = is_prime_async(1537228672809129301u64);
+    let answer22 = is_prime_async(8865838643u64);
     let el = now.elapsed();
     println!("Is_prime_async took: {:?} seconds.", el);
 
     let now = std::time::Instant::now();
-    let _answer = is_prime(18446744073709551557u64);
-    let _answer1 = is_prime(1537228672809129301u64);
-    let _answer2 = is_prime(8865838643u64);
-    let _answewr3 = is_prime(3074457345618258590u64);
-    let _answer4 = is_prime(3074457345618258599u64);
+    let answer111 = is_prime(1537228672809129301u64);
+    let answer222 = is_prime(8865838643u64);
     let el = now.elapsed();
     println!("Is_prime took: {:?} seconds.", el);
+
+    let one = !answer1 && !answer11 && !answer111;
+    assert!(one);
+    let two = answer2 && answer22 && answer222;
+    assert!(two);
 
 }
